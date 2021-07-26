@@ -1,0 +1,40 @@
+---
+# defaults file for create-virtual-resources
+config_dir: /opt/kvm-resources
+ssh_pub_key_path: ~/.ssh/id_rsa.pub
+
+images:
+  - name: ubuntu20.04
+    image_url: https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img
+
+networks:
+  - name: internal
+    forward:
+      mode: nat
+    bridge:
+      name: virbr1
+      stp: "on"
+      delay: 0
+    domain:
+      name: internal.lo
+    ip:
+      address: 192.168.50.1
+      netmask: 255.255.255.0
+      dhcp:
+        range:
+          start: 192.168.50.128
+          end: 192.168.50.254
+
+instances:
+  - name: ubuntu
+    skip_create: false
+    vcpus: 1
+    size: 10G
+    memory: 1024
+    os_variant: ubuntu20.04
+    network: internal
+    username: ubuntu
+    disk_options: device=disk
+    install_packages:
+      - python
+

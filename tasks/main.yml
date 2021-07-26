@@ -1,0 +1,124 @@
+---
+# tasks file for create-virtual-resources
+- name: Ensure virtualisation tools are installed
+  command: eopkg it -y qemu libisoburn virt-manager libvirt
+  when: ansible_distribution == 'Solus'
+
+- name: Ensure virtualisation tools are installed
+  apt:
+    name: "{{ packages }}"
+    state: present
+  vars:
+    packages:
+      - qemu
+      - qemu-kvm
+      - qemu-system
+      - qemu-utils
+      - libvirt-clients
+      - libvirt-daemon-system
+      - virtinst
+      - libisoburn1
+      - virt-manager
+      - xorriso
+  when: ansible_distribution in ["Ubuntu","Pop!_OS"]
+
+- name: Ensure virtualisation services are running
+  service:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - libvirtd
+    - virtlogd.socket
+    - virtlogd
+
+- name: Ensure configuration directories
+  file:
+    path: "{{ config_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - networks
+    - images
+    - instances
+
+- name: Get all defined networks
+  command: virsh net-list --all --name
+  register: net_list
+
+- name: Copy networks
+  template:
+    src: v-network.xml.j2
+    dest: "{{ config_dir }}/networks/{{ item.name }}.xml"
+  loop: "{{ networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: copied_networks
+
+- name: Stop network if changed
+  command: virsh net-destroy {{ item.item.name }}
+  when:
+    - item.changed
+    - item.item.name in net_list.stdout_lines
+  loop: "{{ copied_networks.results}}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Undefine network if changed
+  command: virsh net-undefine {{ item.item.name }}
+  when:
+    - item.changed
+    - item.item.name in net_list.stdout_lines
+  loop: "{{ copied_networks.results}}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Get all defined networks
+  command: virsh net-list --all --name
+  register: net_list
+
+- name: Ensure networks are defined and configured
+  command: virsh net-define {{ config_dir }}/networks/{{ item.name }}.xml
+  when: item.name not in net_list.stdout_lines
+  loop: "{{ networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Get inactive networks
+  command: virsh net-list --inactive --name
+  register: inactive_net_list
+
+- name: Auto start networks
+  command: virsh net-autostart {{ item.name }}
+  loop: "{{ networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Start networks if inactive
+  command: virsh net-start {{ item.name }}
+  when: item.name in inactive_net_list.stdout_lines
+  loop: "{{ networks }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Download cloud images
+  get_url:
+    url: "{{ item.image_url }}"
+    dest: "{{ config_dir }}/images/{{ item.name }}"
+    mode: "0440"
+  loop: "{{ images }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Get ssh public key content
+  become: no
+  slurp:
+    src: "{{ ssh_pub_key_path }}"
+  register: ssh_public_key
+
+- name: Process virtual machine creation
+  include_tasks:
+    file: create.yaml
+  vars:
+    instance: "{{ item }}"
+  with_items:
+    - "{{ instances }}"

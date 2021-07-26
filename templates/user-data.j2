@@ -1,0 +1,57 @@
+#cloud-config
+
+hostname: "{{ instance.name }}"
+preserve_hostname: False
+
+# Install additional packages on first boot
+#
+# Default: none
+#
+# if packages are specified, this apt_update will be set to true
+#
+# packages may be supplied as a single package name or as a list
+# with the format [<package>, <version>] wherein the specifc
+# package version will be installed.
+packages: {{ instance.install_packages }}
+
+#cloud-config
+#
+# growpart entry is a dict, if it is not present at all
+# in config, then the default is used ({'mode': 'auto', 'devices': ['/']})
+#
+#  mode:
+#    values:
+#     * auto: use any option possible (any available)
+#             if none are available, do not warn, but debug.
+#     * growpart: use growpart to grow partitions
+#             if growpart is not available, this is an error.
+#     * off, false
+#
+# devices:
+#   a list of things to resize.
+#   items can be filesystem paths or devices (in /dev)
+#   examples:
+#     devices: [/, /dev/vdb1]
+#
+# ignore_growroot_disabled:
+#   a boolean, default is false.
+#   if the file /etc/growroot-disabled exists, then cloud-init will not grow
+#   the root partition.  This is to allow a single file to disable both
+#   cloud-initramfs-growroot and cloud-init's growroot support.
+#
+#   true indicates that /etc/growroot-disabled should be ignored
+#
+growpart:
+  mode: auto
+  devices: ["/"]
+  ignore_growroot_disabled: false
+
+users:
+  - name: {{ instance.username }}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+    shell: /bin/bash
+    ssh_import_id: None
+    lock_passwd: true
+    ssh_authorized_keys:
+      - {{ ssh_public_key.content|b64decode }}

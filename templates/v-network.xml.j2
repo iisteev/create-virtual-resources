@@ -1,0 +1,11 @@
+<network>
+  <name>{{ item.name }}</name>
+  <forward mode="{{ item.forward.mode | default("nat") }}"/>
+  <bridge name="{{ item.bridge.name }}" stp="{{ item.bridge.stp | default("on") }}" delay="{{ item.bridge.delay | default(0) }}"/>
+  <domain name="{{ item.domain.name }}"/>
+  <ip address="{{ item.ip.address }}" netmask="{{ item.ip.netmask }}">
+    <dhcp>
+      <range start="{{ item.ip.dhcp.range.start }}" end="{{ item.ip.dhcp.range.end }}"/>
+    </dhcp>
+  </ip>
+</network>

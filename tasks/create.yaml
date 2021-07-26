@@ -1,0 +1,89 @@
+---
+- name: List installed instances
+  shell: virsh list --all | awk -F ' ' '{print $2}'
+  register: installed_instances
+
+- name: Create instance/virtual machine
+  block:
+    - name: Create a qcow2 image
+      command: |
+        qemu-img create \
+          -f qcow2 \
+          -F qcow2 \
+          -b {{ config_dir }}/images/{{ images
+              | selectattr('name', 'equalto', instance.os_variant)
+              | map(attribute='name')
+              | list
+              | first }} {{ config_dir }}/instances/{{ instance.name }}.img
+
+    - name: Resize disk image to {{ instance.size }}
+      command: "qemu-img resize {{ config_dir }}/instances/{{ instance.name }}.img {{ instance.size }}"
+
+    - name: Create a temp directory
+      file:
+        path: "/tmp/{{ instance.name }}"
+        state: directory
+        mode: 0755
+
+    - name: Copy user-data in temp directory
+      template:
+        src: "user-data.j2"
+        dest: "/tmp/{{ instance.name }}/user-data"
+
+    - name: Copy meta-data in temp directory
+      template:
+        src: "meta-data.j2"
+        dest: "/tmp/{{ instance.name }}/meta-data"
+
+    - name: Create iso for cloud init
+      command: |
+        xorriso \
+          -as mkisofs \
+          -volid cidata \
+          -joliet \
+          -output {{ config_dir }}/instances/{{ instance.name }}-cloud-init.iso \
+          -rock /tmp/{{ instance.name  }}/user-data /tmp/{{ instance.name }}/meta-data
+
+    - name: Install virtual machine
+      command: "virt-install \
+        --memory {{ instance.memory }} \
+        --vcpus {{ instance.vcpus }} \
+        --name {{ instance.name }} \
+        --disk  {{ config_dir }}/instances/{{ instance.name }}.img{{ ',' + instance.disk_options | default('') }} \
+        --disk {{ config_dir }}/instances/{{ instance.name }}-cloud-init.iso,device=cdrom \
+        --os-type Linux \
+        --os-variant {{ instance.os_variant }} \
+        --virt-type kvm \
+        --graphics spice \
+        --noautoconsole \
+        --network network:{{ instance.network }} \
+        --import"
+
+    - name: Register ip address
+      shell: "virsh domifaddr {{ instance.name }} | grep ipv4 | awk -F '         ' '{print $2}' | awk -F '/' '{print $1}'"
+      register: instance_ip
+      retries: 20
+      until: instance_ip.stdout != ""
+
+    - name: Make sure if ssh connection works
+      become: no
+      local_action: shell ssh -oStrictHostKeyChecking=no {{ instance.username }}@{{ instance_ip.stdout }} "echo success"
+      register: connection_ok
+      retries: 20
+      until: connection_ok.stdout == "success"
+
+    - name: Wait for cloud init to finish booting up
+      become: no
+      local_action: shell ssh -oStrictHostKeyChecking=no {{ instance.username }}@{{ instance_ip.stdout }} "cat /var/lib/cloud/instance/boot-finished"
+      register: cloud_init_finished
+      retries: 10
+      delay: 5
+      until: cloud_init_finished.stdout != ""
+  when:
+    - instance.name not in installed_instances.stdout_lines
+    - instance.skip_create is undefined or not instance.skip_create
+  always:
+    - name: cleanup
+      file:
+        path: "/tmp/{{ instance.name }}"
+        state: absent
