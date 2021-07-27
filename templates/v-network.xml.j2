@@ -2,10 +2,16 @@
   <name>{{ item.name }}</name>
   <forward mode="{{ item.forward.mode | default("nat") }}"/>
   <bridge name="{{ item.bridge.name }}" stp="{{ item.bridge.stp | default("on") }}" delay="{{ item.bridge.delay | default(0) }}"/>
+{% if item.domain is defined and item.domain.name is defined %}
   <domain name="{{ item.domain.name }}"/>
+{% endif %}
+{% if item.ip is defined %}
   <ip address="{{ item.ip.address }}" netmask="{{ item.ip.netmask }}">
+{% if item.ip.dhcp is defined %}
     <dhcp>
       <range start="{{ item.ip.dhcp.range.start }}" end="{{ item.ip.dhcp.range.end }}"/>
     </dhcp>
+{% endif %}
   </ip>
+{% endif %}
 </network>
