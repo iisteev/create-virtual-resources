@@ -1,7 +1,15 @@
 <network>
   <name>{{ item.name }}</name>
   <forward mode="{{ item.forward.mode | default("nat") }}"/>
-  <bridge name="{{ item.bridge.name }}" stp="{{ item.bridge.stp | default("on") }}" delay="{{ item.bridge.delay | default(0) }}"/>
+  <bridge
+    name="{{ item.bridge.name }}"
+{% if item.bridge.stp is defined %}
+    stp="{{ item.bridge.stp }}"
+{% endif %}
+{% if item.bridge.delay is defined %}
+    delay="{{ item.bridge.delay }}"
+{% endif %}
+  />
 {% if item.domain is defined and item.domain.name is defined %}
   <domain name="{{ item.domain.name }}"/>
 {% endif %}

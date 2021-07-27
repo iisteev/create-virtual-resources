@@ -8,6 +8,11 @@ images:
     image_url: https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img
 
 networks:
+  - name: bridge
+    forward:
+      mode: bridge
+    bridge:
+      name: gateway-br
   - name: internal
     forward:
       mode: nat
